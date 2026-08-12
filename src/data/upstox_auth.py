@@ -5,50 +5,40 @@ from dotenv import load_dotenv
 import upstox_client
 from upstox_client.rest import ApiException
 
-# Load .env file first
 load_dotenv()
 
 class UpstoxAuth:
-    """Upstox Authentication Manager"""
+    """Upstox Authentication Manager with token expiry handling"""
     
     def __init__(self):
-        # Load from environment
         self.api_key = os.getenv('UPSTOX_API_KEY')
         self.api_secret = os.getenv('UPSTOX_API_SECRET')
         self.redirect_uri = os.getenv('UPSTOX_REDIRECT_URI', 'https://localhost:8000/callback')
         self.access_token = os.getenv('UPSTOX_ACCESS_TOKEN')
         
-        # Debug token status
         if self.access_token:
             logger.debug(f"Token loaded: {self.access_token[:20]}...")
         else:
-            logger.warning("No access token found in environment")
+            logger.warning("No access token found")
         
-        # Create configuration with token
         self.config = upstox_client.Configuration()
         if self.access_token:
             self.config.access_token = self.access_token
-        
-        # Create API client
         self.api_client = upstox_client.ApiClient(self.config)
     
     def get_auth_url(self):
         """Get the authorization URL"""
-        auth_url = (
+        return (
             f"https://api.upstox.com/v2/login/authorization/dialog?"
             f"client_id={self.api_key}&"
             f"redirect_uri={self.redirect_uri}&"
             f"response_type=code"
         )
-        logger.info("🔗 Authorization URL generated")
-        return auth_url
     
     def generate_token_from_code(self, auth_code):
         """Exchange authorization code for access token"""
         try:
             login_api = upstox_client.LoginApi()
-            
-            logger.info("🔄 Requesting access token from Upstox...")
             
             token_response = login_api.token(
                 api_version='2.0',
@@ -61,18 +51,13 @@ class UpstoxAuth:
             
             if token_response and hasattr(token_response, 'access_token'):
                 self.access_token = token_response.access_token
-                
-                # Save to .env
-                self._save_token_to_env(self.access_token)
-                
-                # Update configuration
+                self._save_token(token_response.access_token)
                 self.config.access_token = self.access_token
                 self.api_client = upstox_client.ApiClient(self.config)
-                
-                logger.success("✅ Access token generated successfully!")
+                logger.success("✅ Token generated!")
                 return self.access_token
             else:
-                logger.error(f"Unexpected response: {token_response}")
+                logger.error("Failed to get token")
                 return None
                 
         except ApiException as e:
@@ -82,36 +67,29 @@ class UpstoxAuth:
             logger.error(f"Error: {e}")
             return None
     
-    def _save_token_to_env(self, token):
-        """Save access token to .env file"""
+    def _save_token(self, token):
+        """Save token to .env file"""
         try:
             env_path = '.env'
-            
-            # Read existing .env
             lines = []
             if os.path.exists(env_path):
                 with open(env_path, 'r') as f:
                     lines = f.readlines()
             
-            # Update or add token
-            token_found = False
             with open(env_path, 'w') as f:
+                token_found = False
                 for line in lines:
                     if line.startswith('UPSTOX_ACCESS_TOKEN='):
                         f.write(f'UPSTOX_ACCESS_TOKEN={token}\n')
                         token_found = True
                     else:
                         f.write(line)
-                
                 if not token_found:
                     f.write(f'\nUPSTOX_ACCESS_TOKEN={token}\n')
             
-            # Update environment
             os.environ['UPSTOX_ACCESS_TOKEN'] = token
             self.access_token = token
-            
-            logger.info("💾 Token saved to .env file")
-            
+            logger.info("💾 Token saved")
         except Exception as e:
             logger.error(f"Error saving token: {e}")
     
@@ -120,24 +98,52 @@ class UpstoxAuth:
         try:
             user_api = upstox_client.UserApi(self.api_client)
             profile = user_api.get_profile(api_version='2.0')
-            
             if profile and hasattr(profile, 'data'):
-                user_data = profile.data
-                logger.success(f"✅ Connected as: {user_data.user_name}")
-                return user_data
-            else:
-                logger.error("Could not get profile data")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Profile error: {e}")
-            return None
+                return profile.data
+        except:
+            pass
+        return None
     
     def is_token_valid(self):
-        """Check if token is valid"""
+        """Check if current token is valid"""
         if not self.access_token:
-            logger.error("No access token available")
             return False
-        
         profile = self.get_profile()
         return profile is not None
+    
+    def ensure_valid_token(self):
+        """
+        Check token and prompt for re-authentication if expired.
+        Returns True if token is valid (or was renewed), False if user skipped.
+        """
+        if self.is_token_valid():
+            return True
+        
+        logger.warning("⚠️ Token expired or invalid!")
+        print("\n" + "="*60)
+        print("⚠️  UPSTOX TOKEN EXPIRED — RE-AUTHENTICATION REQUIRED")
+        print("="*60)
+        
+        auto = input("\nAuto-regenerate token? (y/n): ").strip().lower()
+        
+        if auto == 'y':
+            auth_url = self.get_auth_url()
+            print(f"\n1. Open this URL:\n\n{auth_url}\n")
+            print("2. Log in and authorize")
+            print("3. Copy the FULL redirect URL from your browser\n")
+            
+            redirect_url = input("Paste redirect URL: ").strip()
+            
+            if 'code=' in redirect_url:
+                auth_code = redirect_url.split('code=')[1].split('&')[0]
+                token = self.generate_token_from_code(auth_code)
+                
+                if token:
+                    print("✅ Token renewed successfully!")
+                    return True
+            
+            print("❌ Failed to renew token")
+            return False
+        else:
+            print("⚠️ Skipping authentication. Collector will not work.")
+            return False

@@ -15,7 +15,7 @@ from config.settings import settings
 
 
 class DataCollector:
-    """Live Data Collection for 20 Nifty Stocks"""
+    """Live Data Collection with Auto Token Check"""
     
     def __init__(self, refresh_interval=None):
         self.auth = UpstoxAuth()
@@ -26,8 +26,9 @@ class DataCollector:
         self.refresh_interval = refresh_interval or settings.DEFAULT_REFRESH
     
     def start_collection(self):
-        if not self.auth.is_token_valid():
-            logger.error("Invalid token")
+        # Check token FIRST, prompt if expired
+        if not self.auth.ensure_valid_token():
+            logger.error("❌ Cannot start — invalid token")
             return False
         
         self.running = True
@@ -57,10 +58,18 @@ class DataCollector:
     def _collection_loop(self):
         while self.running:
             try:
+                # Check token validity before each cycle
+                if not self.auth.is_token_valid():
+                    logger.error("❌ Token expired during collection!")
+                    if not self.auth.ensure_valid_token():
+                        logger.error("Cannot renew token. Stopping.")
+                        break
+                
                 if self._is_market_open():
                     self._collect_all_stocks()
                 else:
                     logger.debug("Market closed")
+                
                 time.sleep(self.refresh_interval)
             except KeyboardInterrupt:
                 break
@@ -69,7 +78,7 @@ class DataCollector:
                 time.sleep(60)
     
     def _collect_all_stocks(self):
-        logger.info(f"COLLECTING {len(settings.TRACKING_SYMBOLS)} STOCKS (refresh: {self.refresh_interval}s)")
+        logger.info(f"COLLECTING {len(settings.TRACKING_SYMBOLS)} STOCKS")
         
         current_date = datetime.now(self.ist).date()
         expiry_date = market_calendar.get_stock_expiry(current_date)
@@ -85,15 +94,12 @@ class DataCollector:
                 if not instrument_key:
                     continue
                 
-                # Get spot
                 spot_price = self._get_spot(instrument_key)
                 if not spot_price:
                     continue
                 
-                # Get chain
                 chain = self._get_option_chain(instrument_key, expiry_str)
                 
-                # Find ATM
                 all_strikes = []
                 if chain:
                     for item in chain:
@@ -103,7 +109,6 @@ class DataCollector:
                 
                 atm_strike = self._find_atm_strike(spot_price, all_strikes)
                 
-                # Build data
                 data = {
                     'spot_price': spot_price, 'atm_strike': atm_strike,
                     'expiry_date': expiry_str, 'days_to_expiry': days_to_expiry,
@@ -120,7 +125,6 @@ class DataCollector:
                     'pcr': 0,
                 }
                 
-                # Extract ATM
                 if chain:
                     for item in chain:
                         strike = self._get_attr(item, 'strike_price', 0)
@@ -175,7 +179,6 @@ class DataCollector:
                 self._store_to_database(symbol, data)
                 self.data_cache[symbol] = data
                 success_count += 1
-                
                 time.sleep(0.3)
                 
             except Exception as e:
