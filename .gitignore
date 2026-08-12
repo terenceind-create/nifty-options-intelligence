@@ -1,0 +1,12 @@
+# Python 
+__pycache__/ 
+*.py[cod] 
+venv/ 
+.env 
+data/*.db 
+logs/ 
+*.log 
+.DS_Store 
+*.pyc 
+.idea/ 
+.vscode/ 
