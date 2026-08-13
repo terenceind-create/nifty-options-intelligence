@@ -64,8 +64,8 @@ class Settings:
     DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", 8501))
     
     # Refresh intervals in seconds
-    REFRESH_OPTIONS = [180, 300, 900]  # 3min, 5min, 15min
-    DEFAULT_REFRESH = int(os.getenv("REFRESH_INTERVAL_SECONDS", 300))
+    REFRESH_OPTIONS = [60, 180, 300]  # 3min, 5min, 15min
+    DEFAULT_REFRESH = int(os.getenv("REFRESH_INTERVAL_SECONDS", 60))
     
     @property
     def REFRESH_INTERVAL(self):

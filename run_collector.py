@@ -6,12 +6,12 @@ from src.data.collector import DataCollector
 
 def main():
     parser = argparse.ArgumentParser(description='Nifty Options Data Collector')
-    parser.add_argument('--refresh', '-r', type=int, default=300,
-                       choices=[180, 300, 900],
+    parser.add_argument('--refresh', '-r', type=int, default=60,
+                       choices=[60, 180, 300],
                        help='Refresh interval: 180 (3min), 300 (5min), 900 (15min)')
     args = parser.parse_args()
     
-    refresh_map = {180: "3 minutes", 300: "5 minutes", 900: "15 minutes"}
+    refresh_map = {60: "1 minute", 180: "3 minutes", 300: "5 minutes"}
     
     print("\n" + "="*60)
     print("NIFTY OPTIONS DATA COLLECTOR")
