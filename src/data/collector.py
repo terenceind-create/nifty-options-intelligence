@@ -136,7 +136,7 @@ class DataCollector:
                                 market = self._get_attr(call, 'market_data', None)
                                 greeks = self._get_attr(call, 'option_greeks', None)
                                 if market:
-                                    data['ce_ltp'] = self._get_attr(market, 'ltp', 0)
+                                    data['ce_ltp'] = (self._get_attr(market, 'bid_price', 0) + self._get_attr(market, 'ask_price', 0)) / 2
                                     data['ce_bid'] = self._get_attr(market, 'bid_price', 0)
                                     data['ce_ask'] = self._get_attr(market, 'ask_price', 0)
                                     data['ce_oi'] = int(self._get_attr(market, 'oi', 0))
@@ -156,7 +156,7 @@ class DataCollector:
                                 market = self._get_attr(put, 'market_data', None)
                                 greeks = self._get_attr(put, 'option_greeks', None)
                                 if market:
-                                    data['pe_ltp'] = self._get_attr(market, 'ltp', 0)
+                                    data['pe_ltp'] = (self._get_attr(market, 'bid_price', 0) + self._get_attr(market, 'ask_price', 0)) / 2
                                     data['pe_bid'] = self._get_attr(market, 'bid_price', 0)
                                     data['pe_ask'] = self._get_attr(market, 'ask_price', 0)
                                     data['pe_oi'] = int(self._get_attr(market, 'oi', 0))
